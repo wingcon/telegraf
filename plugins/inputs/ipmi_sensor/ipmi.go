@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"os"
 
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/internal"
@@ -33,6 +34,8 @@ type Ipmi struct {
 	Timeout       internal.Duration
 	MetricVersion int
 	UseSudo       bool
+	UseCache      bool
+	CachePath     string
 }
 
 var sampleConfig = `
@@ -65,6 +68,12 @@ var sampleConfig = `
 
   ## Schema Version: (Optional, defaults to version 1)
   metric_version = 2
+
+  ## If ipmitool should use a cache
+  use_cache = true
+
+  ## Path to the ipmitools cache file
+  cache_path = "/tmp/"
 `
 
 // SampleConfig returns the documentation about the sample configuration
@@ -115,6 +124,30 @@ func (m *Ipmi) parse(acc telegraf.Accumulator, server string) error {
 		opts = conn.options()
 	}
 	opts = append(opts, "sdr")
+	if m.UseCache {
+		cacheFile := m.CachePath + "/" + server + "_ipmi_cache"
+		_, err := os.Stat(cacheFile)
+		if os.IsNotExist(err) {
+			dumpOpts := opts
+			// init cache file
+			dumpOpts = append(dumpOpts, "dump")
+			dumpOpts = append(dumpOpts, cacheFile)
+			name := m.Path
+			if m.UseSudo {
+				// -n - avoid prompting the user for input of any kind
+				dumpOpts = append([]string{"-n", name}, dumpOpts...)
+				name = "sudo"
+			}
+			cmd := execCommand(name, dumpOpts...)
+			out, err := internal.CombinedOutputTimeout(cmd, m.Timeout.Duration)
+			if err != nil {
+				return fmt.Errorf("failed to run command %s: %s - %s", strings.Join(cmd.Args, " "), err, string(out))
+			}
+		}
+		// -S /tmp/cache_file speeds up ipmitool runs (by 2 to 10 times on HP servers)
+		opts = append(opts, "-S")
+		opts = append(opts, cacheFile)
+	}
 	if m.MetricVersion == 2 {
 		opts = append(opts, "elist")
 	}
@@ -290,6 +323,8 @@ func init() {
 		m.Path = path
 	}
 	m.Timeout = internal.Duration{Duration: time.Second * 20}
+	m.UseCache = true
+	m.CachePath = "/tmp"
 	inputs.Add("ipmi_sensor", func() telegraf.Input {
 		m := m
 		return &m
