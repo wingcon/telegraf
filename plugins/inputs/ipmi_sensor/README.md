@@ -53,6 +53,12 @@ ipmitool -I lan -H SERVER -U USERID -P PASSW0RD sdr
 
   ## Schema Version: (Optional, defaults to version 1)
   metric_version = 2
+
+  ## If ipmitool should use a cache
+  use_cache = true
+
+  ## Path to the ipmitools cache file (defaults to OS temp dir)
+  cache_path = "/tmp"
 ```
 
 ### Measurements

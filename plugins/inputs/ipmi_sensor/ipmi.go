@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 	"os"
+	"path/filepath"
 
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/internal"
@@ -72,8 +73,8 @@ var sampleConfig = `
   ## If ipmitool should use a cache
   use_cache = true
 
-  ## Path to the ipmitools cache file
-  cache_path = "/tmp/"
+  ## Path to the ipmitools cache file (defaults to OS temp dir)
+  cache_path = "/tmp"
 `
 
 // SampleConfig returns the documentation about the sample configuration
@@ -125,7 +126,7 @@ func (m *Ipmi) parse(acc telegraf.Accumulator, server string) error {
 	}
 	opts = append(opts, "sdr")
 	if m.UseCache {
-		cacheFile := m.CachePath + "/" + server + "_ipmi_cache"
+		cacheFile := filepath.Join(m.CachePath, server + "_ipmi_cache")
 		_, err := os.Stat(cacheFile)
 		if os.IsNotExist(err) {
 			dumpOpts := opts
@@ -324,7 +325,7 @@ func init() {
 	}
 	m.Timeout = internal.Duration{Duration: time.Second * 20}
 	m.UseCache = true
-	m.CachePath = "/tmp"
+	m.CachePath = os.TempDir()
 	inputs.Add("ipmi_sensor", func() telegraf.Input {
 		m := m
 		return &m
